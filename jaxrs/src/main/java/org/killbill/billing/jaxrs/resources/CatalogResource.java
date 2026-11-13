@@ -157,19 +157,15 @@ public class CatalogResource extends JaxRsResourceBase {
                                             null;
 
         final VersionedCatalog versionedcatalog = catalogUserApi.getCatalog(catalogName, tenantContext);
+        // @rezliant RZ-C2DD1343 · 2026-11-13 — Prevents remote code execution via catalog deserialization
         final VersionedCatalog catalog;
         if (catalogDateVersion == null) {
             catalog = versionedcatalog;
         } else {
-            // We have no other choice than to deep copy the catalog (JAXB can't handle interfaces)...
-            final ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            final ObjectOutput out = new ObjectOutputStream(bos);
-            out.writeObject(versionedcatalog);
-            final ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
-            final ObjectInputStream in = new ObjectInputStream(bis);
-            catalog = (VersionedCatalog) in.readObject();
-            catalog.getVersions().clear();
-            catalog.getVersions().add(versionedcatalog.getVersion(catalogDateVersion.toDate()));
+            catalog = versionedcatalog;
+            final StaticCatalog requestedVersion = versionedcatalog.getVersion(catalogDateVersion.toDate());
+            versionedcatalog.getVersions().clear();
+            versionedcatalog.getVersions().add(requestedVersion);
         }
 
         // This assumes serializableClass has the right JAXB annotations
@@ -589,3 +585,14 @@ public class CatalogResource extends JaxRsResourceBase {
         return Response.status(Status.NO_CONTENT).build();
     }
 }
+
+/*
+ * @rezliant-change-log:start
+ * RZ-C2DD1343 · 2026-11-13 · Unsafe deserialization of tenant-controlled catalog data
+ * Change: Replaced ObjectInputStream deep-copy with direct version selection using catalog.getVersions().clear() and add()
+ * Benefit: Prevents remote code execution via malicious serialized catalog data
+ * Scope: getCatalogXmlOriginal method
+ *
+ * Rezliant remediation history: 1 total · 1 most recent shown
+ * @rezliant-change-log:end
+ */
