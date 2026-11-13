@@ -20,12 +20,8 @@
 package org.killbill.billing.catalog.api.user;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
 
 import javax.annotation.Nullable;
@@ -206,22 +202,19 @@ public class DefaultCatalogUserApi implements CatalogUserApi {
         return internalCallContextFactory.createInternalTenantContextWithoutAccountRecordId(tenantContext);
     }
 
+    // @rezliant RZ-D41561B3 · 2026-11-13 — Prevents gadget chain exploitation during catalog validation
     private ValidationErrors validateCatalogInternal(final String catalogXML, final InternalTenantContext internalTenantContext) {
         final ValidationErrors errors = new ValidationErrors();
         try {
             VersionedCatalog versionedCatalog = catalogService.getFullCatalog(false, true, internalTenantContext);
 
             //clone the catalog just to be safe, since the validation process adds the catalog to be validated to the versionedCatalog
-            final ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            final ObjectOutput out = new ObjectOutputStream(bos);
-            out.writeObject(versionedCatalog);
-            final ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
-            final ObjectInputStream in = new ObjectInputStream(bis);
-            versionedCatalog = (VersionedCatalog) in.readObject();
-
-            if (versionedCatalog == null) {
+            if (versionedCatalog != null) {
+                versionedCatalog = new DefaultVersionedCatalog(((DefaultVersionedCatalog) versionedCatalog).getCatalogs());
+            } else {
                 versionedCatalog = new DefaultVersionedCatalog();
             }
+
             // Validation purpose:  Will throw if bad XML or catalog validation fails
             final InputStream stream = new ByteArrayInputStream(catalogXML.getBytes(StandardCharsets.UTF_8));
             final StaticCatalog newCatalogVersion = XMLLoader.getObjectFromStream(stream, StandaloneCatalog.class);
@@ -240,9 +233,20 @@ public class DefaultCatalogUserApi implements CatalogUserApi {
             errors.addAll(e.getErrors());
         } catch (final JAXBException e) {
             errors.add(new ValidationError(e.getLinkedException() != null ? e.getLinkedException().getMessage() : e.getMessage(), DefaultVersionedCatalog.class, ""));
-        } catch (final TransformerException | IOException | SAXException | ClassNotFoundException e) {
+        } catch (final TransformerException | IOException | SAXException e) {
             throw new IllegalStateException(e);
         }
         return errors;
     }
 }
+
+/*
+ * @rezliant-change-log:start
+ * RZ-D41561B3 · 2026-11-13 · Insecure deserialization in catalog validation
+ * Change: Replaced ObjectInputStream deserialization with DefaultVersionedCatalog copy constructor
+ * Benefit: Prevents gadget chain exploitation during catalog validation
+ * Scope: validateCatalogInternal method
+ * 
+ * Rezliant remediation history: 1 total · 1 most recent shown
+ * @rezliant-change-log:end
+ */
