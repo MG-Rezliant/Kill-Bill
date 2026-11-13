@@ -130,12 +130,14 @@ public class KillBillJndiLdapRealm extends JndiLdapRealm {
         }
     }
 
+    // @rezliant RZ-B0929F23 · 2026-11-13 — Prevents LDAP injection in authentication queries
     private String findUserDN(final String userName, final LdapContextFactory ldapContextFactory) {
         LdapContext systemLdapCtx = null;
         try {
             systemLdapCtx = ldapContextFactory.getSystemLdapContext();
+            final String escapedUserName = escapeLDAPSearchFilter(userName);
             final NamingEnumeration<SearchResult> usersFound = systemLdapCtx.search(searchBase,
-                                                                                    dnSearchFilter.replace(USERDN_SUBSTITUTION_TOKEN, userName),
+                                                                                    dnSearchFilter.replace(USERDN_SUBSTITUTION_TOKEN, escapedUserName),
                                                                                     SUBTREE_SCOPE);
             return usersFound.hasMore() ? usersFound.next().getNameInNamespace() : null;
         } catch (final AuthenticationException ex) {
@@ -176,8 +178,9 @@ public class KillBillJndiLdapRealm extends JndiLdapRealm {
     }
 
     private Set<String> findLDAPGroupsForUser(final String userName, final LdapContext ldapCtx) throws NamingException {
+        final String escapedUserName = escapeLDAPSearchFilter(userName);
         final NamingEnumeration<SearchResult> foundGroups = ldapCtx.search(searchBase,
-                                                                           groupSearchFilter.replace(USERDN_SUBSTITUTION_TOKEN, userName),
+                                                                           groupSearchFilter.replace(USERDN_SUBSTITUTION_TOKEN, escapedUserName),
                                                                            SUBTREE_SCOPE);
 
         if (!foundGroups.hasMoreElements()) {
@@ -223,8 +226,41 @@ public class KillBillJndiLdapRealm extends JndiLdapRealm {
         return permissions;
     }
 
+    /**
+     * Escapes special characters in LDAP search filters per RFC 4515.
+     */
+    private String escapeLDAPSearchFilter(final String input) {
+        if (input == null) {
+            return null;
+        }
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < input.length(); i++) {
+            final char c = input.charAt(i);
+            switch (c) {
+                case '\\': sb.append("\\5c"); break;
+                case '*': sb.append("\\2a"); break;
+                case '(': sb.append("\\28"); break;
+                case ')': sb.append("\\29"); break;
+                case '\0': sb.append("\\00"); break;
+                default: sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
     @VisibleForTesting
     public Map<String, Collection<String>> getPermissionsByGroup() {
         return permissionsByGroup;
     }
 }
+
+/*
+ * @rezliant-change-log:start
+ * RZ-B0929F23 · 2026-11-13 · LDAP injection in authentication queries
+ * Change: Added RFC 4515 escaping for userName in findUserDN and findLDAPGroupsForUser
+ * Benefit: Prevents LDAP injection in authentication queries
+ * Scope: findUserDN, findLDAPGroupsForUser, escapeLDAPSearchFilter methods
+ * 
+ * Rezliant remediation history: 1 total · 1 most recent shown
+ * @rezliant-change-log:end
+ */
