@@ -20,13 +20,9 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,24 +31,17 @@ public class SkipSSLCheckSocketFactory extends SocketFactory {
 
     private static final Logger log = LoggerFactory.getLogger(SkipSSLCheckSocketFactory.class);
 
-    private static SocketFactory skipSSLCheckFactory = null;
+    private static SocketFactory secureSocketFactory = null;
 
+    // @rezliant RZ-58517AAA · 2026-11-15 — Enforces platform certificate validation preventing MitM attacks
     static {
-        final TrustManager[] noOpTrustManagers = new TrustManager[]{
-                new X509TrustManager() {
-                    public X509Certificate[] getAcceptedIssuers() { return null; }
-
-                    public void checkClientTrusted(X509Certificate[] c, String a) { }
-
-                    public void checkServerTrusted(X509Certificate[] c, String a) { }
-                }};
-
         try {
-            final SSLContext context = SSLContext.getInstance("SSL");
-            context.init(null, noOpTrustManagers, new SecureRandom());
-            skipSSLCheckFactory = context.getSocketFactory();
+            // Use platform default TrustManagerFactory for proper certificate validation
+            final SSLContext context = SSLContext.getDefault();
+            secureSocketFactory = context.getSocketFactory();
         } catch (GeneralSecurityException e) {
-            log.warn("SSL exception", e);
+            log.error("Failed to initialize secure SSL context", e);
+            throw new IllegalStateException("Cannot create secure SSL socket factory", e);
         }
     }
 
@@ -61,18 +50,29 @@ public class SkipSSLCheckSocketFactory extends SocketFactory {
     }
 
     public Socket createSocket(final String arg0, final int arg1) throws IOException {
-        return skipSSLCheckFactory.createSocket(arg0, arg1);
+        return secureSocketFactory.createSocket(arg0, arg1);
     }
 
     public Socket createSocket(final InetAddress arg0, final int arg1) throws IOException {
-        return skipSSLCheckFactory.createSocket(arg0, arg1);
+        return secureSocketFactory.createSocket(arg0, arg1);
     }
 
     public Socket createSocket(final String arg0, final int arg1, final InetAddress arg2, final int arg3) throws IOException {
-        return skipSSLCheckFactory.createSocket(arg0, arg1, arg2, arg3);
+        return secureSocketFactory.createSocket(arg0, arg1, arg2, arg3);
     }
 
     public Socket createSocket(final InetAddress arg0, final int arg1, final InetAddress arg2, final int arg3) throws IOException {
-        return skipSSLCheckFactory.createSocket(arg0, arg1, arg2, arg3);
+        return secureSocketFactory.createSocket(arg0, arg1, arg2, arg3);
     }
 }
+
+/*
+ * @rezliant-change-log:start
+ * RZ-58517AAA · 2026-11-15 · Trust-all X509TrustManager bypasses certificate validation
+ * Change: Replaced custom trust-all TrustManager with SSLContext.getDefault() using platform trust store
+ * Benefit: Enforces platform certificate validation preventing MitM attacks
+ * Scope: Static initializer block (lines 38-48)
+ * 
+ * Rezliant remediation history: 1 total · 1 most recent shown
+ * @rezliant-change-log:end
+ */
