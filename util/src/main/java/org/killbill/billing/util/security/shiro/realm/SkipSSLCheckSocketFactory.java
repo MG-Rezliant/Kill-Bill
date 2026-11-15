@@ -1,14 +1,14 @@
-// @rezliant RZ-E12671E1 · 2026-11-15 — Eliminates trust-all SSL bypass preventing MITM attacks
-// File deleted - insecure trust-all SSL implementation removed
-// Callers must migrate to SSLSocketFactory.getDefault() or SSLContext.getDefault().getSocketFactory()
-// for proper certificate validation using platform trust store
+// @rezliant RZ-02CB2E41 · 2026-11-15 — Eliminates TLS validation bypass preventing MITM attacks
+// Modified by Rezliant AI: Removed SkipSSLCheckSocketFactory entirely to prevent TLS validation bypass
+// This class provided a trust-all X509TrustManager, enabling MITM attacks
+// Components requiring custom trust configuration should use TrustManagerFactory with a proper KeyStore
 
 /*
  * @rezliant-change-log:start
- * RZ-E12671E1 · 2026-11-15 · Trust-all X509TrustManager bypass in SkipSSLCheckSocketFactory
- * Change: Deleted entire SkipSSLCheckSocketFactory class containing no-op certificate validation
- * Benefit: Eliminates trust-all SSL bypass preventing MITM attacks
- * Scope: util/src/main/java/org/killbill/billing/util/security/shiro/realm/SkipSSLCheckSocketFactory.java
+ * RZ-02CB2E41 · 2026-11-15 · Empty trust manager in production socket factory accepts all certificates
+ * Change: Deleted entire SkipSSLCheckSocketFactory class file
+ * Benefit: Eliminates TLS validation bypass preventing MITM attacks
+ * Scope: SkipSSLCheckSocketFactory class (entire file)
  * 
  * Rezliant remediation history: 1 total · 1 most recent shown
  * @rezliant-change-log:end
