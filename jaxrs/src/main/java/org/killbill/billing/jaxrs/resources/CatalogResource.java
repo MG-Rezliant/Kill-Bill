@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.io.ObjectInputFilter;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -164,6 +165,20 @@ public class CatalogResource extends JaxRsResourceBase {
             out.writeObject(versionedcatalog);
             final ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
             final ObjectInputStream in = new ObjectInputStream(bis);
+            // @rezliant RZ-761E047D · 2026-11-20 — Restrict deserialization to VersionedCatalog classes only
+            in.setObjectInputFilter(info -> {
+                if (info.serialClass() == null) {
+                    return ObjectInputFilter.Status.UNDECIDED;
+                }
+                String className = info.serialClass().getName();
+                if (className.startsWith("org.killbill.billing.catalog.") ||
+                    className.startsWith("java.util.") ||
+                    className.startsWith("java.lang.") ||
+                    className.startsWith("org.joda.time.")) {
+                    return ObjectInputFilter.Status.ALLOWED;
+                }
+                return ObjectInputFilter.Status.REJECTED;
+            });
             catalog = (VersionedCatalog) in.readObject();
             catalog.getVersions().clear();
             catalog.getVersions().add(versionedcatalog.getVersion(catalogDateVersion.toDate()));
