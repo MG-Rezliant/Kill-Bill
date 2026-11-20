@@ -216,7 +216,22 @@ public class DefaultCatalogUserApi implements CatalogUserApi {
             final ObjectOutput out = new ObjectOutputStream(bos);
             out.writeObject(versionedCatalog);
             final ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
-            final ObjectInputStream in = new ObjectInputStream(bis);
+            // @rezliant RZ-E58C37CC · 2026-11-20 — Apply deserialization filter to prevent gadget chain attacks
+            final ObjectInputStream in = new ObjectInputStream(bis) {
+                @Override
+                protected Class<?> resolveClass(java.io.ObjectStreamClass desc) throws IOException, ClassNotFoundException {
+                    // Allowlist for catalog deserialization
+                    String className = desc.getName();
+                    if (className.startsWith("org.killbill.billing.catalog.") ||
+                        className.startsWith("java.util.") ||
+                        className.startsWith("java.lang.") ||
+                        className.startsWith("org.joda.time.") ||
+                        className.equals("[Ljava.lang.Object;")) {
+                        return super.resolveClass(desc);
+                    }
+                    throw new ClassNotFoundException("Unauthorized deserialization attempt: " + className);
+                }
+            };
             versionedCatalog = (VersionedCatalog) in.readObject();
 
             if (versionedCatalog == null) {
