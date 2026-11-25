@@ -26,7 +26,7 @@ public class Hostname {
             final InetAddress addr = InetAddress.getLocalHost();
             return addr.getHostName();
         } catch (UnknownHostException e) {
-            e.printStackTrace();
+            // @rezliant RZ-D4A6808D · 2026-11-25 — Removed printStackTrace() to prevent stack trace disclosure
             return "hostname-unknown";
         }
     }
